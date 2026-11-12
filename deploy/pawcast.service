@@ -1,0 +1,44 @@
+[Unit]
+Description=pawcast -- SHOUTcast-Transcaster-Ersatz (AutoDJ + DJ-Relay)
+Documentation=file:///opt/pawcast/docs/dj-protocol-spec.md
+After=network-online.target shoutcast.service
+Wants=network-online.target
+Requires=shoutcast.service
+
+[Service]
+Type=simple
+User=transcast
+Group=transcast
+WorkingDirectory=/opt/pawcast
+
+# Der Dienst laeuft vollstaendig autonom:
+ExecStart=/usr/bin/python3 -m pawcast --config /etc/pawcast/sc_trans.conf
+KillSignal=SIGKILL
+KillMode=control-group
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+CPUQuota=50%
+Nice=10
+
+# Hartaetung
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/pawcast /var/log/pawcast
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+StandardOutput=append:/var/log/pawcast/stdout.log
+StandardError=append:/var/log/pawcast/stdout.log
+
+[Install]
+WantedBy=multi-user.target

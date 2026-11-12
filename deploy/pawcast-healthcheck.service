@@ -1,0 +1,17 @@
+[Unit]
+Description=Health-Check fuer pawcast (autonom)
+After=pawcast.service
+Requires=pawcast.service
+
+[Service]
+Type=oneshot
+User=transcast
+Group=transcast
+ExecStart=/usr/bin/python3 -m pawcast.healthcheck --config /etc/pawcast/sc_trans.conf
+# Bei Fehler: Dienst neu starten
+SuccessExitStatus=0
+StandardOutput=append:/var/log/pawcast/healthcheck.log
+StandardError=append:/var/log/pawcast/healthcheck.log
+
+[Install]
+WantedBy=multi-user.target

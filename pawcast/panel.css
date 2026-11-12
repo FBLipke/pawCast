@@ -1,0 +1,143 @@
+/*
+ * pawCast WebPanel -- Layout im Stil des originalen SHOUTcast-DNAS-Admin.
+ *
+ * Die Farbwerte stammen aus dem index.css des Original-DNAS
+ * (am DNAS auf 10.232.136.119:8000 byte-identisch verifiziert, 1217 Bytes):
+ *
+ *   #DEAC2F  Gold      Logo, Section-Header (.tsp), Tabellenkopf
+ *   #4C4C4C  Dunkelgrau Section-Hintergrund
+ *   #F0F0F0  Hellgrau  Input, Infobox-Kopf
+ *   #2350A5  Blau      Submit-Button
+ *   #2762AE  Blau      Links
+ *   #636363  Textgrau  Standardtext
+ *   #CCCCCC  Rahmen
+ *
+ * Uebersetzt wurden die Original-Klassen: .tsp, .en, .ls, .infh, .infb,
+ * .thr, .submit, .tnl, .titlespan sowie die Statusfarben b.e/b.d/b.u.
+ */
+
+  body {
+    margin: 0; padding: 0 15px 30px;
+    background: #FFFFFF;
+    color: #636363;
+    font-family: arial, helvetica, sans-serif;
+    font-size: small;
+  }
+  a:link, a:visited { color: #2762AE; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* --- Kopfzeile wie beim Original --- */
+  #hdr {
+    background: #4C4C4C;
+    padding: 10px 14px;
+    margin: 0 -15px 14px;
+    overflow: hidden;
+  }
+  #hdr .logo {
+    color: #DEAC2F; font-weight: bold; font-size: 2.25em;
+    letter-spacing: -0.0625em; padding-left: 0.1em;
+    float: left; line-height: 1;
+  }
+  #hdr .logo small {
+    font-size: 0.32em; letter-spacing: 0; padding-left: 8px;
+    display: block; color: #F0F0F0; font-weight: normal;
+  }
+  #hdr .right {
+    float: right; text-align: right; color: #F0F0F0; padding-top: 6px;
+  }
+  #hdr .right b { color: #DEAC2F; }
+
+  /* --- Section-Header (.tsp) --- */
+  .tsp {
+    background: #4C4C4C; color: #DEAC2F;
+    font-weight: bold; padding: 4px 10px; margin: 0 0 10px;
+    font-size: small; letter-spacing: 0.3px;
+  }
+  .tsp .r { float: right; font-weight: normal; }
+  .tsp .r a { color: #F0F0F0; }
+
+  /* --- Karten / Infoboxen --- */
+  .en {
+    border-collapse: collapse; border: 1px solid #CCCCCC;
+    width: 100%; margin-bottom: 14px; background: #FFFFFF;
+  }
+  .en td { padding: 7px 10px; vertical-align: top; }
+  .en td.h {
+    background: #F0F0F0; width: 150px; color: #4C4C4C;
+    font-weight: bold; white-space: nowrap;
+  }
+  .infh {
+    position: relative; top: -15px; margin: 0 -15px; padding: 2px 0;
+    border-bottom: 1px solid #CCCCCC; color: #DEAC2F; font-weight: bold;
+  }
+  .infb {
+    display: inline; float: left; margin: 0 15px; padding: 15px 15px 10px;
+  }
+
+  /* --- Formular --- */
+  textarea, input, select {
+    background-color: #F0F0F0; border: 1px solid #CCCCCC;
+    color: #636363; font-family: arial, helvetica, sans-serif;
+    font-size: small; padding: 3px 5px; border-radius: 0;
+  }
+  input:focus, select:focus { border-color: #2762AE; background: #FFFFFF; }
+  input[type=text] { width: 260px; }
+  .submit {
+    color: white; background: #2350A5; border: 1px solid #CCCCCC;
+    padding: 4px 12px; cursor: pointer; font-family: arial, sans-serif;
+    font-size: small; font-weight: bold;
+  }
+  .submit:hover { background: #2762AE; }
+  .submit:active { background: #1B3F82; }
+  .submit[disabled] { background: #AAAAAA; cursor: not-allowed; }
+
+  /* --- Tabellen (.ls) --- */
+  .ls { border-collapse: collapse; border: 1px solid #CCCCCC; width: 100%; }
+  .ls td, .ls th {
+    border-bottom: 1px solid #EEEEEE; padding: 5px 9px; font-size: small;
+    text-align: left;
+  }
+  .ls th {
+    background: #F0F0F0; color: #4C4C4C; font-weight: bold;
+    border-bottom: 1px solid #CCCCCC;
+  }
+  .ls tr:hover td { background: #F7F9FC; }
+  .ls tr.cur td { background: #FFF8E1; color: #8A6A10; font-weight: bold; }
+
+  /* --- Statusfarben (b.e / b.d / b.u wie Original) --- */
+  b.e { color: red; }
+  b.d { color: green; }
+  b.u { color: blue; }
+  .ok { color: green; font-weight: bold; }
+  .warn { color: #DEAC2F; font-weight: bold; }
+  .bad { color: red; font-weight: bold; }
+
+  /* --- Jetzt laeuft --- */
+  .nowtitle {
+    font-size: 22px; font-weight: bold; color: #4C4C4C;
+    padding: 6px 0 2px; line-height: 1.25; word-break: break-word;
+  }
+  .nowtitle .artist { color: #2350A5; }
+  .nowmeta { color: #636363; padding-bottom: 4px; }
+  .nowmeta b { color: #4C4C4C; }
+
+  /* --- Log / XML --- */
+  pre {
+    background: #F7F7F7; border: 1px solid #CCCCCC; color: #636363;
+    font-family: "Courier New", monospace; font-size: 11px;
+    padding: 8px; margin: 0; max-height: 280px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* --- Zwei Spalten --- */
+  .cols { display: flex; flex-wrap: wrap; gap: 0 20px; }
+  .cols > * { flex: 1 1 320px; min-width: 300px; }
+
+  hr { border: 0; background-color: #CCCCCC; height: 1px; margin: 14px 0; }
+  .foot { color: #999999; font-size: 11px; text-align: center; padding-top: 8px; }
+  .tag {
+    display: inline-block; padding: 0 6px; border: 1px solid #CCCCCC;
+    background: #F0F0F0; font-size: 11px;
+  }
+  .tag.live { background: #E7F7E7; border-color: #9CCB9C; color: green; }
+  .err { color: red; padding: 6px 0 0; }

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pawCast</title>
+<!--
+  Layout im Stil des originalen SHOUTcast-DNAS-Admin (index.css).
+  Farbwerte aus dem Original:
+    #DEAC2F  Gold (Logo, Section-Header, Tabellenkopf)
+    #4C4C4C  Dunkelgrau (Section-Hintergrund)
+    #F0F0F0  Hellgrau (Input, Infobox-Kopf)
+    #2350A5  Blau (Submit-Button)
+    #2762AE  Link-Blau
+    #636363  Textgrau
+-->
+<link rel="stylesheet" href="/panel.css">
+</head>
+<body>
+
+<div id="hdr">
+  <div class="logo">pawCast<small>SHOUTcast-Transcaster-Ersatz</small></div>
+  <div class="right">
+    Status: <span id="conn">verbinde…</span><br>
+    Version: <b>pawCast 1.0</b>
+  </div>
+</div>
+
+<div class="cols">
+
+  <div>
+    <div class="tsp">Aktuelle Wiedergabe</div>
+    <table class="en">
+      <tr>
+        <td class="h">Jetzt läuft</td>
+        <td>
+          <div class="nowtitle" id="np">–</div>
+          <div class="nowmeta" id="np-meta"></div>
+        </td>
+      </tr>
+      <tr>
+        <td class="h">Stream</td>
+        <td id="streaminfo">–</td>
+      </tr>
+      <tr>
+        <td class="h">Aktionen</td>
+        <td>
+          <input type="button" class="submit" id="btn-next" value="⏭ Titel überspringen">
+          <input type="button" class="submit" id="btn-shuffle" value="🔀 Shuffle">
+          <input type="button" class="submit" id="btn-reload" value="↻ Neu laden">
+          <div class="err" id="err"></div>
+        </td>
+      </tr>
+    </table>
+
+    <div class="tsp">Current Stream Information <span class="r" id="dnas-src"></span></div>
+    <table class="en" id="dnas"></table>
+
+    <div class="tsp">Endpoint</div>
+    <table class="en" id="endpoint"></table>
+
+    <div class="tsp">DJ-Sitzungen</div>
+    <table class="en" id="djs"></table>
+  </div>
+
+  <div>
+    <div class="tsp">Playlist <span class="r" id="pl-count"></span></div>
+    <table class="ls">
+      <thead><tr><th>#</th><th>Titel</th></tr></thead>
+      <tbody id="pl"></tbody>
+    </table>
+
+    <div class="tsp">Metadaten-XML <span class="r">Original-Format</span></div>
+    <pre id="xml">–</pre>
+
+    <div class="tsp">Log</div>
+    <pre id="log">–</pre>
+  </div>
+
+</div>
+
+<hr>
+<div class="foot">
+  🐾 pawCast · <a href="/api/v1/health">/api/v1/health</a> ·
+  <a href="/metadata">/metadata</a> · <a href="/status">/status</a>
+</div>
+
+<script>
+"use strict";
+
+// Passwort: im Query (?pass=...) oder SessionStorage. Sonst einmal fragen.
+const Q = new URLSearchParams(location.search);
+let PASS = Q.get("pass") || sessionStorage.getItem("pawcast_pass") || "";
+if (!PASS) {
+  PASS = window.prompt("pawCast Admin-Passwort:");
+  if (PASS) sessionStorage.setItem("pawcast_pass", PASS);
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function api(path, opts = {}) {
+  const sep = path.includes("?") ? "&" : "?";
+  const url = path + (PASS ? sep + "pass=" + encodeURIComponent(PASS) : "");
+  const res = await fetch(url, Object.assign({ cache: "no-store" }, opts));
+  const ctype = res.headers.get("Content-Type") || "";
+  const body = ctype.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error((body && body.error) || ("HTTP " + res.status));
+  return body;
+}
+
+function row(label, value) {
+  return '<tr><td class="h">' + esc(label) + "</td><td>" +
+         (value == null ? "–" : value) + "</td></tr>";
+}
+
+let currentTrack = "";
+
+async function refresh() {
+  try {
+    const [status, pl, djs] = await Promise.all([
+      api("/api/v1/status"),
+      api("/api/v1/playlist").catch(() => ({ entries: [] })),
+      api("/api/v1/djs").catch(() => ({ djs: [] })),
+    ]);
+
+    $("conn").innerHTML = '<span class="ok">● verbunden</span>';
+
+    // Titel bevorzugt aus dem Original-Metadaten-XML (/metadata)
+    let artist = "", title = "";
+    try {
+      const xml = await (await fetch("/metadata", { cache: "no-store" })).text();
+      $("xml").textContent = xml.trim();
+      const g = (tag) => {
+        const m = xml.match(new RegExp("<" + tag + ">([\\s\\S]*?)</" + tag + ">"));
+        return m ? m[1].trim() : "";
+      };
+      artist = g("artist");
+      title = g("name");
+    } catch (e) {
+      $("xml").textContent = "(nicht erreichbar)";
+    }
+
+    if (!artist && !title) {
+      const raw = status.currenttrack || "";
+      const i = raw.indexOf(" - ");
+      if (i > 0) { artist = raw.slice(0, i); title = raw.slice(i + 3); }
+      else { title = raw; }
+    }
+    currentTrack = status.currenttrack || "";
+
+    $("np").innerHTML = artist
+      ? '<span class="artist">' + esc(artist) + "</span> – " + esc(title)
+      : (esc(title) || "–");
+
+    const meta = [];
+    if (status.genre) meta.push("Genre: <b>" + esc(status.genre) + "</b>");
+    if (status.live_dj) meta.push("Live-DJ: <b>" + esc(status.live_dj) + "</b>");
+    if (status.streamtitle) meta.push("Streamtitle: <b>" + esc(status.streamtitle) + "</b>");
+    $("np-meta").innerHTML = meta.join(" &nbsp;·&nbsp; ");
+
+    $("streaminfo").innerHTML =
+      "URL: <b>" + esc(status.streamurl || "–") + "</b><br>" +
+      "DJ-Port: <b>" + esc(status.djport) + "</b> &nbsp; " +
+      "Microserver: <b>" + esc(status.microserver_port) + "</b>";
+
+    const ep = status.endpoint || {};
+    $("endpoint").innerHTML =
+      row("Server", esc(ep.serverip + ":" + ep.serverport)) +
+      row("Bitrate", esc(ep.bitrate) + " kbps") +
+      row("Samplerate", esc(ep.samplerate) + " Hz") +
+      row("Channels", esc(ep.channels));
+
+    // -- DNAS-Status: die echten Stream-Daten, wie auf der DNAS-Seite
+    api("/api/v1/dnas").then(d => {
+      if (!d.ok) {
+        $("dnas-src").textContent = "";
+        $("dnas").innerHTML = row("Status",
+          '<span class="bad">DNAS nicht erreichbar: ' +
+          esc(d.error || "unbekannt") + "</span>");
+        return;
+      }
+      $("dnas-src").textContent = "vom DNAS";
+      const up = /is up/i.test(d.stream_status || "");
+      $("dnas").innerHTML =
+        row("Listing Status", esc(d.listing_status || "–")) +
+        row("Stream Status",
+          (up ? '<span class="ok">' : '<span class="bad">') +
+          esc(d.stream_status || "–") + "</span>") +
+        row("Listener Peak", esc(d.listener_peak || "–")) +
+        (d.avg_play_time ? row("Avg. Play Time", esc(d.avg_play_time)) : "") +
+        row("Stream Name", esc(d.stream_name || "–")) +
+        row("Stream Genre(s)", esc(d.genre || "–")) +
+        (d.website ? row("Stream Website",
+          '<a href="' + esc(d.website) + '" target="_blank">' +
+          esc(d.website) + "</a>") : "") +
+        row("Playing Now",
+          d.now_playing ? '<b><a href="http://' + esc(ep.serverip) + ":" +
+            esc(ep.serverport) + '/currentsong?sid=1">' + esc(d.now_playing) +
+            "</a></b>" : "–") +
+        (d.next_playing ? row("Playing Next",
+          '<b><a href="http://' + esc(ep.serverip) + ":" + esc(ep.serverport) +
+          '/nextsong?sid=1">' + esc(d.next_playing) + "</a></b>") : "");
+    }).catch(() => {
+      $("dnas").innerHTML = row("Status",
+        '<span class="bad">DNAS-Status nicht abrufbar</span>');
+    });
+
+    const djList = djs.djs || [];
+    $("djs").innerHTML = djList.length
+      ? djList.map(d => row(esc(d.name),
+          '<span class="tag live">Prio ' + esc(d.priority) + "</span>")).join("")
+      : row("Status", '<span class="warn">Keine DJs angemeldet</span>');
+
+    const entries = pl.entries || [];
+    $("pl-count").textContent = entries.length ? entries.length + " Einträge" : "";
+    $("pl").innerHTML = entries.length
+      ? entries.map((e, i) => {
+          const base = String(e).split("/").pop();
+          const cur = currentTrack && base && currentTrack.includes(base);
+          return '<tr class="' + (cur ? "cur" : "") + '"><td>' + (i + 1) +
+                 '</td><td title="' + esc(e) + '">' + esc(base) + "</td></tr>";
+        }).join("")
+      : '<tr><td colspan="2">Playlist ist leer.</td></tr>';
+
+    api("/api/v1/logs").then(l => {
+      $("log").textContent = (l.lines || []).slice(-120).join("\n") || "(leer)";
+    }).catch(() => { $("log").textContent = "(Log nicht erreichbar)"; });
+
+    $("err").textContent = "";
+  } catch (e) {
+    $("conn").innerHTML = '<span class="bad">● Fehler</span>';
+    $("err").textContent = "API nicht erreichbar: " + e.message;
+  }
+}
+
+async function act(path, label) {
+  try {
+    await api(path, { method: "POST" });
+    $("err").textContent = "";
+    setTimeout(refresh, 400);
+  } catch (e) {
+    $("err").textContent = label + " fehlgeschlagen: " + e.message;
+  }
+}
+
+$("btn-next").onclick = () => act("/api/v1/playlist/next", "Überspringen");
+$("btn-shuffle").onclick = () => act("/api/v1/playlist/shuffle", "Shuffle");
+$("btn-reload").onclick = () => refresh();
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
