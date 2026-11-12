@@ -309,6 +309,12 @@ def main(argv=None) -> int:
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     parser.add_argument("--dry-run", action="store_true",
                         help="Config laden und anzeigen, nicht starten")
+    parser.add_argument("--genconf", action="store_true",
+                        help="Beispielkonfiguration erzeugen (statt zu starten)")
+    parser.add_argument("--genconf-djlogins", metavar="DATEI",
+                        help="zusaetzlich eine DJ-Login-Datei erzeugen")
+    parser.add_argument("--force", action="store_true",
+                        help="beim --genconf vorhandene Dateien ueberschreiben")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -317,6 +323,26 @@ def main(argv=None) -> int:
     )
 
     config_path = args.config_opt or args.config
+
+    # ---- --genconf: Config erzeugen, nicht starten ----
+    if args.genconf:
+        if not config_path:
+            print("Usage: pawcast --genconf <sc_trans.conf>",
+                  file=sys.stderr)
+            return 2
+        try:
+            written, djlogins = config_mod.genconf(
+                config_path, args.genconf_djlogins, force=args.force)
+        except FileExistsError as exc:
+            print("FEHLER: %s" % exc, file=sys.stderr)
+            return 1
+        print("Config erzeugt: %s" % written)
+        if djlogins:
+            print("DJ-Logins erzeugt: %s" % djlogins)
+        print("Passwoerter anpassen: adminpassword, password_1, "
+              "djpassword_1")
+        return 0
+
     if not config_path:
         print("Usage: pawcast <sc_trans.conf>", file=sys.stderr)
         return 2

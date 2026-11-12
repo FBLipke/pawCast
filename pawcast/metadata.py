@@ -223,12 +223,48 @@ class IcyMetadataInjector:
     """Injiziert ICY-Metadaten in einen MP3-Stream.
 
     Das Standardverfahren: alle ``metaint`` Bytes Audio folgen ein Byte
-    Laenge (L) in 16-Bit-Bits. Ist L > 0, folgen L Bytes Metadaten
+    Laenge (L). Ist L > 0, folgen L Bytes Metadaten
     (``StreamTitle='...';``), aufgefuellt mit Nullen.
+
+    ⭐ Die Laengen-Semantik (12.11.2026 am DNAS 2.5.5 verifiziert)
+    ----------------------------------------------------------------
+    Der **sc_serv 2.5.5 zaehlt die Laenge in 16-Byte-Bloecken**, nicht
+    in Bytes. Ein Laengenbyte von 4 bedeutet dort 64 Bytes.
+
+    Belegt am laufenden Stream:
+
+        b"StreamTitle='Alanis Morissette - Thank U (Official Video)';"
+        + 5 Fuellnullen = 64 Bytes = 4 * 16
+
+    Bei der ueblichen Byte-Semantik waere der Block 59 Bytes lang --
+    der DNAS haette dann 59 * 16 = 944 Bytes gelesen und den Stream
+    desynchronisiert.
+
+    Deshalb gibt es zwei Modi:
+
+    * ``length_mode="dnas"`` (Default) -- Laenge in 16-Byte-Bloecken.
+      Richtig fuer den sc_serv 2.5.5.
+    * ``length_mode="bytes"`` -- Laenge in Bytes. Das ist der
+      SHOUTcast-Standard und wird von aelteren DNAS-Versionen und
+      Icecast erwartet.
+
+    WICHTIG: Dieser Injector wird im Source-Pfad **nicht** benutzt.
+    Das Original setzt die Metadaten ueber den Admin-Kanal
+    (``admin.cgi?mode=updinfo``) -- siehe ``MetadataSender``. Der
+    Injector ist damit Reserve fuer Clients, die den Titel direkt
+    inline setzen wollen.
     """
 
-    def __init__(self, metaint: int = 8192):
+    #: Die vom DNAS 2.5.5 verwendete Blockgroesse.
+    DNAS_BLOCK = 16
+
+    def __init__(self, metaint: int = 8192, length_mode: str = "dnas"):
         self.metaint = metaint
+        if length_mode not in ("dnas", "bytes"):
+            raise ValueError(
+                "length_mode muss 'dnas' oder 'bytes' sein, nicht %r"
+                % length_mode)
+        self.length_mode = length_mode
         self._counter = 0
         self._pending = b""
         self.title = ""
@@ -238,14 +274,19 @@ class IcyMetadataInjector:
 
     def _metadata_block(self) -> bytes:
         payload = f"StreamTitle='{self.title}';".encode("utf-8", "replace")
-        length = len(payload)
-        if length > 255:
-            payload = payload[:255]
+        if self.length_mode == "dnas":
+            # Laenge in 16-Byte-Bloecken, auf das Blockraster aufgefüllt.
+            blocks = max(1, -(-len(payload) // self.DNAS_BLOCK))
+            length = blocks
+            pad = blocks * self.DNAS_BLOCK - len(payload)
+        else:
+            # Standard: Laenge in Bytes, auf 16 Byte aufgefuellt.
             length = len(payload)
-        block = bytes([length]) + payload
-        # auf Vielfaches von 16 auffuellen (SHOUTcast-Konvention)
-        if length % 16 != 0:
-            block += b"\x00" * (16 - (length % 16))
+            if length > 255:
+                payload = payload[:255]
+                length = len(payload)
+            pad = (-length) % self.DNAS_BLOCK
+        block = bytes([length]) + payload + (b"\x00" * pad)
         return block
 
     def inject(self, data: bytes) -> bytes:

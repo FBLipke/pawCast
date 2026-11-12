@@ -107,6 +107,93 @@ class TestConfig(unittest.TestCase):
     def test_unknown_keys(self):
         self.assertIn("bogus_option", self.cfg.unknown)
 
+    def test_djalways_wird_geparst(self):
+        """Regression: der Key hiess im Parser "dalways" (Tippfehler)."""
+        c = tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False)
+        c.write("djalways=1\n")
+        c.close()
+        cfg = config.load(c.name)
+        self.assertEqual(cfg.djalways, 1)
+        self.assertNotIn("djalways", cfg.unknown)
+        os.unlink(c.name)
+
+
+class TestGenconf(unittest.TestCase):
+    """--genconf: pawcast erzeugt die Beispielconfig selbst."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+
+    def _path(self, name):
+        return os.path.join(self.dir, name)
+
+    def test_erzeugt_config(self):
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        self.assertTrue(os.path.exists(path))
+
+    def test_erzeugte_config_ist_lesbar(self):
+        """Der Roundtrip ist das Wichtigste: was genconf schreibt,
+        muss pawcast auch wieder einlesen koennen."""
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        cfg = config.load(path)
+        self.assertEqual(cfg.streamtitle, "The Radio Fire and Ice")
+        self.assertEqual(cfg.adminport, 7999)
+        self.assertEqual(cfg.djport, 9020)
+        self.assertIsNotNone(cfg.endpoint(1))
+        self.assertEqual(cfg.endpoint(1).password, "CHANGE_ME")
+        self.assertEqual(cfg.unknown, {})
+
+    def test_kommentare_in_eigenen_zeilen(self):
+        """Original-Eigenheit: ein Inline-Kommentar wird Teil des Werts."""
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                self.assertNotIn("#", value,
+                                 "Inline-Kommentar in %r" % line)
+
+    def test_djlogins_werden_eingebunden(self):
+        """Ohne include= laedt pawcast die DJ-Accounts nicht."""
+        conf = self._path("sc_trans.conf")
+        dj = self._path("djlogins.conf")
+        config.genconf(conf, dj)
+        cfg = config.load(conf)
+        self.assertEqual(len(cfg.djs), 1)
+        self.assertEqual(cfg.djs[0].login, "admin")
+        self.assertEqual(cfg.djs[0].priority, 9)
+
+    def test_ueberschreibt_nicht(self):
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("MEINE CONFIG\n")
+        with self.assertRaises(FileExistsError):
+            config.genconf(path)
+        # Inhalt unveraendert
+        with open(path, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), "MEINE CONFIG\n")
+
+    def test_force_ueberschreibt(self):
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("MEINE CONFIG\n")
+        config.genconf(path, force=True)
+        with open(path, encoding="utf-8") as fh:
+            self.assertIn("streamtitle", fh.read())
+
+    def test_ohne_djlogins_kein_include(self):
+        path = self._path("sc_trans.conf")
+        config.genconf(path)
+        with open(path, encoding="utf-8") as fh:
+            self.assertNotIn("include=", fh.read())
+
 
 class TestCalendar(unittest.TestCase):
     """Der Kalender-Parser + Writer muss byteweise dem Original entsprechen."""

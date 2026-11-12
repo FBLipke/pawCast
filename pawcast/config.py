@@ -16,7 +16,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 log = logging.getLogger("pawcast.config")
 
@@ -195,7 +195,7 @@ def _parse_line(key: str, value: str, cfg: TranscastConfig) -> None:
         "playlistfile": str, "xfade": int, "shuffle": _as_bool,
         "applyreplaygain": _as_bool, "calculatereplaygain": _as_bool,
         "calendarfile": str,
-        "djport": int, "djport2": int, "djcapture": int, "dalways": int,
+        "djport": int, "djport2": int, "djcapture": int, "djalways": int,
         "djlogin": str, "djpassword": str,
         "adminport": int, "adminuser": str, "adminpassword": str,
         "unlockkeyname": str, "unlockkeycode": str,
@@ -342,3 +342,130 @@ def save(cfg: TranscastConfig, path: str) -> None:
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
     os.replace(tmp, path)
+
+
+# ----------------------------------------------------------------------
+# --genconf: Beispielkonfiguration erzeugen
+# ----------------------------------------------------------------------
+
+#: Pfade, die der Installer anlegt. Der Generator braucht sie, damit die
+#: erzeugte Config sofort auf eine installierte Instanz passt.
+DEFAULT_PATHS = {
+    "logfile": "/var/log/pawcast/sc_trans.log",
+    "playlistfile": "/var/lib/pawcast/playlists/main.lst",
+    "calendarfile": "/var/lib/pawcast/calendar/dj_calendar.xml",
+}
+
+#: Der Config-Template mit Kommentaren. Entsteht aus dem Original-Format
+#: -- die Kommentare MUESSEN in eigenen Zeilen stehen, sonst wird der
+#: Wert Teil des Passworts (Original-Eigenheit, siehe docs/ARCHITEKTUR.md).
+CONFIG_TEMPLATE = """\
+# pawcast Konfiguration
+# Erzeugt mit: python3 -m pawcast --genconf <datei>
+#
+# KOMMENTARE MUESSEN IN EIGENER ZEILE STEHEN (Original-Eigenheit).
+# Ein "password=geheim # Kommentar" ergibt den Wert "geheim # Kommentar".
+
+# --- Allgemein ---
+log=1
+screenlog=0
+logfile={logfile}
+logdata=1
+
+# --- Stream-Metadaten ---
+streamtitle=The Radio Fire and Ice
+streamurl=http://the-radio-fire-and-ice.de/
+genre=Misc
+usemetadata=1
+nextlookahead=1
+displaymetadatapattern=%R[ - ]%N
+
+# --- AutoDJ ---
+playlistfile={playlistfile}
+calendarfile={calendarfile}
+xfade=2
+shuffle=1
+applyreplaygain=0
+calculatereplaygain=0
+
+# --- DJ-Server ---
+djport=9020
+djport2=0
+djcapture=0
+djalways=0
+
+# --- Admin-Weblet ---
+adminport=7999
+adminuser=admin
+adminpassword=CHANGE_ME
+
+# --- Endpunkt 1: der DNAS ---
+outprotocol_1=1
+serverip_1=127.0.0.1
+serverport_1=8000
+password_1=CHANGE_ME
+encoder_1=mp3
+bitrate_1=128000
+samplerate_1=44100
+channels_1=2
+"""
+
+#: Die DJ-Logins liegen in einer eigenen Datei (Include) -- dann muss die
+#: Haupt-Config nicht die Passwoerter enthalten.
+DJLOGINS_TEMPLATE = """\
+# DJ-Logins. Format: djlogin_N / djpassword_N / djpriority_N
+# Passwoerter hier eintragen, danach chmod 600.
+djlogin_1=admin
+djpassword_1=CHANGE_ME
+djpriority_1=9
+"""
+
+
+def genconf(config_path: str, djlogins_path: Optional[str] = None,
+            force: bool = False) -> Tuple[str, Optional[str]]:
+    """Erzeugt eine Beispielkonfiguration.
+
+    Legt ``config_path`` und -- falls angegeben -- ``djlogins_path`` an.
+    Bestehende Dateien werden **nicht** ueberschrieben, ausser ``force``
+    ist gesetzt.
+
+    Wird eine DJ-Login-Datei erzeugt, traegt die Config am Ende ein
+    ``include=`` -- sonst laedt pawcast die DJ-Accounts nicht.
+
+    Rueckgabe: ``(config_path, djlogins_path)`` -- der zweite Wert ist
+    ``None``, wenn keine DJ-Login-Datei erzeugt wurde.
+    """
+    written: List[str] = []
+
+    if os.path.exists(config_path) and not force:
+        raise FileExistsError(
+            "Config existiert bereits (ueberschreiben mit --force): %s"
+            % config_path)
+
+    directory = os.path.dirname(os.path.abspath(config_path))
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    content = CONFIG_TEMPLATE.format(**DEFAULT_PATHS)
+    if djlogins_path:
+        # Die Include-Zeile muss auf die DJ-Datei zeigen, sonst werden
+        # die DJ-Accounts nicht geladen.
+        content += f"\n# --- DJ-Accounts (eigene Datei, Passwoerter) ---\ninclude={djlogins_path}\n"
+
+    with open(config_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+    written.append(config_path)
+
+    if djlogins_path:
+        if os.path.exists(djlogins_path) and not force:
+            raise FileExistsError(
+                "DJ-Login-Datei existiert bereits "
+                "(ueberschreiben mit --force): %s" % djlogins_path)
+        dj_dir = os.path.dirname(os.path.abspath(djlogins_path))
+        if dj_dir:
+            os.makedirs(dj_dir, exist_ok=True)
+        with open(djlogins_path, "w", encoding="utf-8") as fh:
+            fh.write(DJLOGINS_TEMPLATE)
+        written.append(djlogins_path)
+
+    return config_path, djlogins_path

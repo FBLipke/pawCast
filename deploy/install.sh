@@ -57,66 +57,22 @@ fi
 # 4. Config
 # ------------------------------------------------------------------
 CONFIG="$CONFDIR/sc_trans.conf"
+DJCONF="$CONFDIR/djlogins.conf"
+
+# Die Config erzeugt pawcast selbst -- der Installer hat kein eigenes
+# Template. So gibt es genau eine Quelle fuer die Beispiel-Config.
 if [ ! -f "$CONFIG" ]; then
-    log "Keine Config gefunden -- lege Beispiel an: $CONFIG"
-    cat > "$CONFIG" <<'EOF'
-# pawcast Konfiguration
-# KOMMENTARE MUESSEN IN EIGENER ZEILE STEHEN (Original-Eigenheit).
-streamtitle=My Radio Stream
-streamurl=http://localhost/
-genre=Misc
-
-log=1
-screenlog=0
-logfile=/var/log/pawcast/pawcast.log
-logdata=1
-
-playlistfile=/var/lib/pawcast/playlists/main.lst
-calendarfile=/var/lib/pawcast/calendar/dj_calendar.xml
-xfade=2
-shuffle=1
-
-djport=9020
-djport2=0
-adminport=7999
-adminuser=admin
-adminpassword=CHANGE_ME
-
-usemetadata=1
-nextlookahead=1
-displaymetadatapattern=%R[ - ]%N
-
-outprotocol_1=1
-serverip_1=127.0.0.1
-serverport_1=8000
-password_1=CHANGE_ME
-encoder_1=mp3
-bitrate_1=128000
-samplerate_1=44100
-channels_1=2
-EOF
-    log "WICHTIG: Passwoerter in $CONFIG anpassen!"
+    log "Keine Config gefunden -- erzeuge Beispiel: $CONFIG"
+    python3 -m pawcast --genconf "$CONFIG" --genconf-djlogins "$DJCONF" \
+        || { log "FEHLER: --genconf fehlgeschlagen"; exit 1; }
+    log "WICHTIG: Passwoerter in $CONFIG und $DJCONF anpassen!"
 fi
 chown "$SERVICE_USER:$SERVICE_USER" "$CONFIG"
 chmod 0640 "$CONFIG"
 
-# DJ-Logins in eine separate Datei (Include)
-DJCONF="$CONFDIR/djlogins.conf"
-if [ ! -f "$DJCONF" ]; then
-    cat > "$DJCONF" <<'EOF'
-# DJ-Logins. Format: djlogin_N / djpassword_N / djpriority_N
-# Passwoerter hier eintragen (dann chmod 600).
-djlogin_1=admin
-djpassword_1=CHANGE_ME
-djpriority_1=9
-EOF
+if [ -f "$DJCONF" ]; then
     chown "$SERVICE_USER:$SERVICE_USER" "$DJCONF"
     chmod 0600 "$DJCONF"
-fi
-
-# Include verknuepfen, falls nicht vorhanden
-if ! grep -q "^include=" "$CONFIG"; then
-    echo "include=$DJCONF" >> "$CONFIG"
 fi
 
 # Playlists + Kalender

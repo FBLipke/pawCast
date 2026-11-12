@@ -110,3 +110,24 @@ python3 -m pawcast --config /etc/transcast/sc_trans.conf
 
 Die Konfiguration ist **kompatibel zur Original-`sc_trans.conf`** — dieselben
 Schlüssel, dieselben Namen.
+
+### Beispielkonfiguration erzeugen
+
+pawcast erzeugt die Beispiel-Config selbst — der Installer hat kein eigenes
+Template, es gibt nur eine Quelle:
+
+```bash
+python3 -m pawcast --genconf /etc/pawcast/sc_trans.conf \
+                   --genconf-djlogins /etc/pawcast/djlogins.conf
+```
+
+Die DJ-Logins landen in einer eigenen Datei; die Config verweist mit
+`include=` darauf. Vorhandene Dateien werden **nicht** überschrieben
+(außer mit `--force`). Danach die Passwörter anpassen:
+`adminpassword`, `password_1`, `djpassword_1`.
+
+```bash
+python3 -m pawcast --config /etc/pawcast/sc_trans.conf --dry-run
+```
+
+zeigt die geladene Config ohne den Dienst zu starten.
